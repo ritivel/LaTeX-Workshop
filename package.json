@@ -1022,6 +1022,12 @@
           },
           "default": [
             {
+              "name": "tectonic",
+              "tools": [
+                "tectonic"
+              ]
+            },
+            {
               "name": "latexmk",
               "tools": [
                 "latexmk"
@@ -1074,12 +1080,6 @@
                 "pnw2tex",
                 "latexmk"
               ]
-            },
-            {
-              "name": "tectonic",
-              "tools": [
-                "tectonic"
-              ]
             }
           ],
           "markdownDescription": "Define LaTeX compiling recipes. Each recipe in the list is an object containing its name and the names of tools to be used sequentially, which are defined in `#latex-workshop.latex.tools#`. By default, the first recipe is used to compile the project. For details, please visit https://github.com/James-Yu/LaTeX-Workshop/wiki/Compile#latex-recipes."
@@ -1087,7 +1087,7 @@
         "latex-workshop.latex.recipe.default": {
           "scope": "resource",
           "type": "string",
-          "default": "first",
+          "default": "tectonic",
           "markdownDescription": "Define which recipe is used by `#latex-workshop.build#`. It also applies to auto build. Recipes are referred to by their names as defined in `#latex-workshop.latex.recipes#`. Note there are two particular values: \n- `first` means to use the first recipe in `#latex-workshop.latex.recipes#`;\n- `lastUsed` means to use the last run recipe."
         },
         "latex-workshop.latex.tools": {
@@ -2208,7 +2208,12 @@
           "items": {
             "type": "string"
           },
-          "default": ["\\", ",", "{", "}"],
+          "default": [
+            "\\",
+            ",",
+            "{",
+            "}"
+          ],
           "markdownDescription": "Trigger characters for intellisense of LaTeX documents."
         },
         "latex-workshop.intellisense.atSuggestion.trigger.latex": {
@@ -2946,6 +2951,7 @@
     "lint:fix": "eslint --fix --cache .",
     "release": "npm run clean && npm run lint && npm run compile && vsce package",
     "test": "node ./out/test/runTest.js",
+    "download-tectonic": "bash scripts/download-tectonic.sh",
     "watch-src": "tsc -watch -p tsconfig.json",
     "watch-viewer": "tsc -watch -p viewer/tsconfig.json",
     "update-grammar": "node ./dev/update-grammar.mjs"

@@ -1,6 +1,7 @@
 import vscode from 'vscode'
 import path from 'path'
 import { replaceArgumentPlaceholders } from '../utils/utils'
+import { getTectonicPath } from '../utils/tectonic'
 
 import { lw } from '../lw'
 import type { Recipe, Tool } from '../types'
@@ -80,8 +81,8 @@ export async function build(rootFile: string, langId: string, buildLoop: () => P
     // #4513 If the recipe contains a forced latexmk compilation, don't set the
     // compiledPDFPath so that PDF refresh is handled by file watcher.
     if (!tools.some(tool => tool.command === 'latexmk' &&
-                            tool.args?.includes('-interaction=nonstopmode') &&
-                            tool.args?.includes('-f'))) {
+        tool.args?.includes('-interaction=nonstopmode') &&
+        tool.args?.includes('-f'))) {
         lw.compile.compiledPDFPath = lw.file.getPdfPath(rootFile)
     }
     // Execute the build loop
@@ -123,7 +124,7 @@ async function createOutputSubFolders(rootFile: string) {
             } else {
                 logger.log('Unexpected Error: please see the console log of the Developer Tools of VS Code.')
                 logger.refreshStatus('x', 'errorForeground')
-                throw(e)
+                throw (e)
             }
         }
     }
@@ -191,7 +192,7 @@ async function createBuildTools(rootFile: string, langId: string, recipeName?: s
  * @returns {{tex?: Tool, bib?: Tool, recipe?: string}} - An object containing
  * the TeX and BibTeX tools and the LW recipe name.
  */
-async function findMagicComments(rootFile: string): Promise<{tex?: Tool, bib?: Tool, recipe?: string}> {
+async function findMagicComments(rootFile: string): Promise<{ tex?: Tool, bib?: Tool, recipe?: string }> {
     const regexTex = /^(?:%\s*!\s*T[Ee]X\s(?:TS-)?program\s*=\s*([^\s]*)$)/m
     const regexBib = /^(?:%\s*!\s*BIB\s(?:TS-)?program\s*=\s*([^\s]*)$)/m
     const regexTexOptions = /^(?:%\s*!\s*T[Ee]X\s(?:TS-)?options\s*=\s*(.*)$)/m
@@ -241,7 +242,7 @@ async function findMagicComments(rootFile: string): Promise<{tex?: Tool, bib?: T
         logger.log(`Found LW recipe '${recipe[1]}' by magic comment: ${recipe}.`)
     }
 
-    return {tex: texCommand, bib: bibCommand, recipe: recipe?.[1]}
+    return { tex: texCommand, bib: bibCommand, recipe: recipe?.[1] }
 }
 
 /**
@@ -343,6 +344,12 @@ function populateTools(rootFile: string, buildTools: Tool[]): Tool[] {
     const docker = configuration.get('docker.enabled')
 
     buildTools.forEach(tool => {
+        // Replace tectonic command with bundled binary if available
+        if (tool.command === 'tectonic') {
+            const tectonicPath = getTectonicPath()
+            tool.command = tectonicPath
+            logger.log(`Using Tectonic at: ${tectonicPath}`)
+        }
         if (docker) {
             switch (tool.command) {
                 case 'latexmk':
@@ -384,7 +391,7 @@ function populateTools(rootFile: string, buildTools: Tool[]): Tool[] {
             if ((isLaTeXmk || tool.command === 'pdflatex') && isMikTeX()) {
                 if (tool.name === lw.constant.TEX_MAGIC_PROGRAM_NAME) {
                     // %!TeX options is present. All args are provided in a string and { shell: true }
-                    tool.args = [ `--max-print-line=${lw.constant.MAX_PRINT_LINE} ${tool.args.join(' ')}` ]
+                    tool.args = [`--max-print-line=${lw.constant.MAX_PRINT_LINE} ${tool.args.join(' ')}`]
                 } else {
                     tool.args.unshift('--max-print-line=' + lw.constant.MAX_PRINT_LINE)
                 }

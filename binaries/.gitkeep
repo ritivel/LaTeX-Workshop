@@ -1,0 +1,3 @@
+# This file ensures the binaries directory is tracked by git
+# The actual binaries should be downloaded using scripts/download-tectonic.sh
+
