@@ -27,6 +27,10 @@ class PdfViewerPanel {
                     lw.event.fire(lw.event.ViewerStatusChanged, msg.state)
                     break
                 }
+                case 'execute_command': {
+                    void vscode.commands.executeCommand(msg.command)
+                    break
+                }
                 default: {
                     break
                 }
@@ -168,10 +172,16 @@ async function getPDFViewerContent(pdfUri: vscode.Uri): Promise<string> {
                 vsStore.setState(e.data);
                 break;
             }
+            case 'execute_command': {
+                vsStore.postMessage(e.data);
+                break;
+            }
             default:
             break;
         }
-        vsStore.postMessage(e.data)
+        if (e.data.type !== 'execute_command') {
+            vsStore.postMessage(e.data);
+        }
     });
     </script>
     </body></html>

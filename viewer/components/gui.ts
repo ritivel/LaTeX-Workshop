@@ -5,6 +5,7 @@ import { toggleAutoRefresh } from './refresh.js'
 import { getL10n } from './l10n.js'
 import * as utils from './utils.js'
 import type { PDFViewerApplicationType } from './interface.js'
+import { toggleTextEditing } from './texteditor.js'
 
 declare const PDFViewerApplication: PDFViewerApplicationType
 
@@ -85,12 +86,29 @@ export async function patchViewerUI() {
     for (const node of template.content.childNodes) {
         anchor.parentNode?.insertBefore(node, anchor)
     }
+
+    // Add text editing button to main toolbar (toolbarViewerMiddle, after zoom controls)
+    const textEditingTemplate = document.createElement('template')
+    textEditingTemplate.innerHTML = `<div class="toolbarHorizontalGroup">
+    <div class="splitToolbarButtonSeparator"></div>
+    <button id="textEditingButton" class="toolbarButton" type="button" title="Enable Text Editing" tabindex="73" aria-pressed="false" aria-label="Enable Text Editing">
+        <span>Edit Text</span>
+    </button>
+</div>`
+    const scaleSelectContainer = document.getElementById('scaleSelectContainer')
+    if (scaleSelectContainer && scaleSelectContainer.parentNode) {
+        // Insert after scaleSelectContainer in toolbarViewerMiddle
+        for (const node of textEditingTemplate.content.childNodes) {
+            scaleSelectContainer.parentNode.insertBefore(node, scaleSelectContainer.nextSibling)
+        }
+    }
     const trimButton = document.getElementById('TrimButton')! as HTMLButtonElement
     trimButton.addEventListener('click', (e) => {
         e.stopPropagation()
     })
     registerSynctexCheckBox()
     registerAutoReloadCheckBox()
+    registerTextEditingButton()
 
     template.innerHTML =
 `<!-- History back button, useful in the embedded viewer -->
@@ -129,6 +147,14 @@ function registerAutoReloadCheckBox() {
         autoRefreshOn.checked = toggleAutoRefresh()
         e.stopPropagation()
         // PDFViewerApplication.secondaryToolbar.close()
+    })
+}
+
+function registerTextEditingButton() {
+    const textEditingButton = document.getElementById('textEditingButton')! as HTMLButtonElement
+    textEditingButton.addEventListener('click', (e) => {
+        toggleTextEditing()
+        e.stopPropagation()
     })
 }
 

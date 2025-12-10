@@ -10,6 +10,7 @@ import { populate } from './viewer/pdfviewerpanel'
 
 import type { ClientRequest, PdfViewerParams, PdfViewerState } from '../../types/latex-workshop-protocol-types/index'
 import { Client } from './viewer/client'
+import { TextMapper } from './textmapper'
 
 import { moveActiveEditor } from '../utils/webview'
 
@@ -41,7 +42,7 @@ const isViewing = (fileUri: vscode.Uri) => manager.getClients(fileUri) !== undef
 
 function reload(): void {
     manager.getClients()?.forEach(client => {
-        client.send({type: 'reload'})
+        client.send({ type: 'reload' })
     })
 }
 
@@ -55,7 +56,7 @@ function refresh(pdfUri?: vscode.Uri): void {
     logger.log(`Call refreshExistingViewer: ${pdfUri ?? 'undefined'} .`)
     if (pdfUri === undefined) {
         manager.getClients()?.forEach(client => {
-            client.send({type: 'refresh', pdfFileUri: client.pdfFileUri})
+            client.send({ type: 'refresh', pdfFileUri: client.pdfFileUri })
         })
         return
     }
@@ -67,7 +68,7 @@ function refresh(pdfUri?: vscode.Uri): void {
     }
     logger.log(`Refresh PDF viewer: ${pdfUri}`)
     clientSet.forEach(client => {
-        client.send({type: 'refresh', pdfFileUri: client.pdfFileUri})
+        client.send({ type: 'refresh', pdfFileUri: client.pdfFileUri })
     })
 }
 
@@ -216,7 +217,7 @@ function viewInExternal(pdfUri: vscode.Uri): void {
     }
     logger.log(`Open external viewer for ${pdfUri.toString(true)}`)
     logger.logCommand('Execute the external PDF viewer command', command, args)
-    const proc = cs.spawn(command, args, {cwd: path.dirname(pdfUri.fsPath), detached: true})
+    const proc = cs.spawn(command, args, { cwd: path.dirname(pdfUri.fsPath), detached: true })
     let stdout = ''
     proc.stdout.on('data', newStdout => {
         stdout += newStdout
@@ -307,6 +308,18 @@ function handler(websocket: ws, msg: string): void {
             }
             break
         }
+        case 'edit_text_request': {
+            void handleEditTextRequest(websocket, data)
+            break
+        }
+        case 'edit_text_apply': {
+            void handleEditTextApply(websocket, data)
+            break
+        }
+        case 'add_to_cline': {
+            void handleAddToCline(data)
+            break
+        }
         default: {
             if (lw.extra.liveshare.handle.viewer.syncTeX(websocket, data)) {
                 break
@@ -314,6 +327,307 @@ function handler(websocket: ws, msg: string): void {
             logger.log(`Unknown websocket message: ${msg}`)
             break
         }
+    }
+}
+
+async function handleEditTextRequest(websocket: ws, data: Extract<ClientRequest, { type: 'edit_text_request' }>) {
+    try {
+        const pdfUri = vscode.Uri.parse(data.pdfFileUri, true)
+
+        // Find the client for this websocket
+        const clientSet = manager.getClients(pdfUri)
+        const client = clientSet ? Array.from(clientSet).find(c => c.websocket === websocket) : undefined
+        if (!client) {
+            logger.log('Client not found for edit_text_request')
+            return
+        }
+
+        // Use reverse SyncTeX to find source location
+        const synctexData: Extract<ClientRequest, { type: 'reverse_synctex' }> = {
+            type: 'reverse_synctex',
+            pdfFileUri: data.pdfFileUri,
+            pos: data.pos,
+            page: data.page,
+            textBeforeSelection: data.selectedText || '',
+            textAfterSelection: ''
+        }
+
+        const record = await lw.locate.synctex.components.computeToTeX(synctexData, pdfUri)
+        if (!record) {
+            client.send({
+                type: 'edit_text_request_result',
+                sourceFile: '',
+                line: 0,
+                column: 0,
+                text: data.selectedText || '',
+                context: undefined
+            })
+            return
+        }
+
+        // Read source file
+        const sourceUri = vscode.Uri.file(record.input)
+        let document: vscode.TextDocument
+        try {
+            document = await vscode.workspace.openTextDocument(sourceUri)
+        } catch (error) {
+            logger.logError('Failed to open source file for text editing', error)
+            client.send({
+                type: 'edit_text_request_result',
+                sourceFile: record.input,
+                line: record.line,
+                column: record.column,
+                text: data.selectedText || '',
+                context: undefined
+            })
+            return
+        }
+
+        // Extract text at the location
+        const lineText = document.lineAt(record.line).text
+        const textAtLocation = data.selectedText || lineText.substring(record.column).trim()
+
+        // Get context
+        const context = TextMapper.getTextContext(document, record.line, record.column)
+
+        // Send result back to viewer
+        client.send({
+            type: 'edit_text_request_result',
+            sourceFile: record.input,
+            line: record.line,
+            column: record.column,
+            text: textAtLocation,
+            context
+        })
+    } catch (error) {
+        logger.logError('Error handling edit_text_request', error)
+    }
+}
+
+async function handleEditTextApply(websocket: ws, data: Extract<ClientRequest, { type: 'edit_text_apply' }>) {
+    try {
+        const pdfUri = vscode.Uri.parse(data.pdfFileUri, true)
+
+        // Find the client for this websocket
+        const clientSet = manager.getClients(pdfUri)
+        const client = clientSet ? Array.from(clientSet).find(c => c.websocket === websocket) : undefined
+        if (!client) {
+            logger.log('Client not found for edit_text_apply')
+            return
+        }
+
+        // If source file not provided, try to get it from SyncTeX
+        let sourceFile = data.sourceFile
+        let line = data.line
+        let column = data.column
+
+        if (!sourceFile || line === 0) {
+            // Try to get from SyncTeX - we'd need the position, but for now use the provided data
+            client.send({
+                type: 'edit_text_apply_result',
+                success: false,
+                message: 'Source location not provided'
+            })
+            return
+        }
+
+        // Open and modify the source file
+        const sourceUri = vscode.Uri.file(sourceFile)
+        const document = await vscode.workspace.openTextDocument(sourceUri)
+
+        // Find the text to replace using TextMapper
+        const sourceText = document.getText()
+        const match = TextMapper.findTextInSource(data.oldText, sourceText, line, column)
+
+        if (!match) {
+            // Fallback: try to replace at the given position
+            const lineText = document.lineAt(line).text
+            const range = new vscode.Range(
+                line,
+                column,
+                line,
+                Math.min(column + data.oldText.length, lineText.length)
+            )
+
+            const edit = new vscode.WorkspaceEdit()
+            edit.replace(document.uri, range, data.newText)
+            await vscode.workspace.applyEdit(edit)
+            await document.save()
+        } else {
+            // Use the matched position
+            const range = new vscode.Range(
+                match.line,
+                match.column,
+                match.line,
+                match.column + data.oldText.length
+            )
+
+            const edit = new vscode.WorkspaceEdit()
+            edit.replace(document.uri, range, data.newText)
+            await vscode.workspace.applyEdit(edit)
+            await document.save()
+        }
+
+        // Wait a moment for the save event to propagate
+        await new Promise(resolve => setTimeout(resolve, 200))
+
+        // Trigger recompilation after save
+        // We need to briefly show the document for build() to work (it checks activeTextEditor)
+        // But we'll close it right after to keep the PDF in focus
+        await vscode.window.showTextDocument(document, { preview: true, preserveFocus: false })
+
+        // Wait a bit for the document to become active
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        // Refresh root file cache
+        await lw.root.find()
+        const rootFile = lw.root.file.path
+
+        if (rootFile && lw.root.file.langId) {
+            logger.log(`Auto-compiling after PDF text edit save: ${rootFile}`)
+            try {
+                // Use build with skipSelection=true to avoid prompts
+                // Don't await - let it run in background so we can close the tex tab
+                void lw.compile.build(true, rootFile, lw.root.file.langId)
+            } catch (error) {
+                logger.logError('Error during auto-compile after PDF text edit', error)
+                try {
+                    void vscode.commands.executeCommand('latex-workshop.build')
+                } catch (cmdError) {
+                    logger.logError('Error executing build command', cmdError)
+                }
+            }
+        } else {
+            logger.log(`Root file not found (rootFile: ${rootFile}, langId: ${lw.root.file.langId}), trying build command`)
+            try {
+                void vscode.commands.executeCommand('latex-workshop.build')
+            } catch (cmdError) {
+                logger.logError('Error executing build command', cmdError)
+            }
+        }
+
+        // Close the tex document tab to keep PDF in focus
+        // Small delay to ensure build has started
+        await new Promise(resolve => setTimeout(resolve, 50))
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
+
+        // Send success response
+        client.send({
+            type: 'edit_text_apply_result',
+            success: true,
+            message: 'Text edited and recompilation triggered'
+        })
+    } catch (error) {
+        logger.logError('Error handling edit_text_apply', error)
+        const pdfUri = vscode.Uri.parse(data.pdfFileUri, true)
+        const clientSet = manager.getClients(pdfUri)
+        const client = clientSet ? Array.from(clientSet).find(c => c.websocket === websocket) : undefined
+        if (client) {
+            client.send({
+                type: 'edit_text_apply_result',
+                success: false,
+                message: error instanceof Error ? error.message : 'Unknown error'
+            })
+        }
+    }
+}
+
+async function handleAddToCline(data: Extract<ClientRequest, { type: 'add_to_cline' }>) {
+    try {
+        const pdfUri = vscode.Uri.parse(data.pdfFileUri, true)
+
+        // Use reverse SyncTeX to find source location
+        const synctexData: Extract<ClientRequest, { type: 'reverse_synctex' }> = {
+            type: 'reverse_synctex',
+            pdfFileUri: data.pdfFileUri,
+            pos: data.pos,
+            page: data.page,
+            textBeforeSelection: '',
+            textAfterSelection: ''
+        }
+
+        const record = await lw.locate.synctex.components.computeToTeX(synctexData, pdfUri)
+        if (!record) {
+            // Fallback: just send text without source location
+            logger.log('SyncTeX failed, sending text to Cline without source location')
+            try {
+                await vscode.commands.executeCommand('cline.addToChatDirect', {
+                    selectedText: data.selectedText,
+                    language: 'latex'
+                })
+            } catch (error) {
+                logger.logError('Failed to call Cline addToChatDirect command', error)
+                // Cline might not be installed, that's okay
+            }
+            return
+        }
+
+        // Read source file to get the actual text range
+        const sourceUri = vscode.Uri.file(record.input)
+        let document: vscode.TextDocument
+        try {
+            document = await vscode.workspace.openTextDocument(sourceUri)
+        } catch (error) {
+            logger.logError('Failed to open source file for Add to Cline', error)
+            // Fallback: send without range
+            try {
+                await vscode.commands.executeCommand('cline.addToChatDirect', {
+                    selectedText: data.selectedText,
+                    filePath: record.input,
+                    language: 'latex'
+                })
+            } catch (cmdError) {
+                logger.logError('Failed to call Cline addToChatDirect command', cmdError)
+            }
+            return
+        }
+
+        // Convert line number from 1-indexed (SyncTeX) to 0-indexed (VS Code)
+        const startLine = Math.max(0, record.line - 1)
+
+        // Try to find the selected text in the source to get exact range
+        // Start from the line indicated by SyncTeX
+        let startChar = Math.max(0, record.column > 0 ? record.column - 1 : 0)
+        let endLine = startLine
+        let endChar = startChar
+
+        // Try to find the selected text in the source
+        const normalizedSelectedText = data.selectedText.trim().replace(/\s+/g, ' ')
+        const lineText = document.lineAt(startLine).text
+
+        // Search for the text starting from the column position
+        const searchStart = Math.min(startChar, lineText.length)
+        let foundIndex = lineText.substring(searchStart).toLowerCase().indexOf(normalizedSelectedText.toLowerCase().substring(0, Math.min(50, normalizedSelectedText.length)))
+
+        if (foundIndex >= 0) {
+            startChar = searchStart + foundIndex
+            endChar = Math.min(lineText.length, startChar + normalizedSelectedText.length)
+        } else {
+            // If not found, use the column from SyncTeX or start of line
+            startChar = Math.max(0, record.column > 0 ? record.column - 1 : 0)
+            endChar = Math.min(lineText.length, startChar + normalizedSelectedText.length)
+        }
+
+        // Call Cline's addToChatDirect command
+        try {
+            await vscode.commands.executeCommand('cline.addToChatDirect', {
+                selectedText: data.selectedText,
+                filePath: record.input,
+                language: 'latex',
+                range: {
+                    startLine: startLine,
+                    startChar: startChar,
+                    endLine: endLine,
+                    endChar: endChar
+                }
+            })
+            logger.log(`Added PDF selection to Cline: ${data.selectedText.substring(0, 50)}... from ${record.input}:${record.line}`)
+        } catch (error) {
+            logger.logError('Failed to call Cline addToChatDirect command', error)
+            // Cline might not be installed, that's okay - just log it
+        }
+    } catch (error) {
+        logger.logError('Error handling add_to_cline', error)
     }
 }
 
@@ -386,7 +700,7 @@ async function locate(pdfUri: vscode.Uri, record: SyncTeXRecordToPDF | SyncTeXRe
     const needDelay = showInvisibleWebviewPanel(pdfUri)
     for (const client of clientSet) {
         setTimeout(() => {
-            client.send({type: 'synctex', data: record})
+            client.send({ type: 'synctex', data: record })
         }, needDelay ? 200 : 0)
         logger.log(`Try to synctex ${pdfUri.toString(true)}`)
     }
@@ -434,5 +748,5 @@ function getViewerState(pdfUri: vscode.Uri): (PdfViewerState | undefined)[] {
     if (!panelSet) {
         return []
     }
-    return Array.from(panelSet).map( e => e.state )
+    return Array.from(panelSet).map(e => e.state)
 }

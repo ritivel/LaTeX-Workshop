@@ -2,6 +2,7 @@ import type { ClientRequest, PanelRequest, ServerResponse } from '../../types/la
 import { refresh } from './refresh.js'
 import { forwardSynctex } from './synctex.js'
 import * as utils from './utils.js'
+import { handleEditTextRequestResult, handleEditTextApplyResult } from './texteditor.js'
 
 let server: string
 let websocket: Promise<WebSocket>
@@ -67,6 +68,14 @@ function handler(event: MessageEvent<string>) {
         }
         case 'reload': {
             location.reload()
+            break
+        }
+        case 'edit_text_request_result': {
+            handleEditTextRequestResult(data)
+            break
+        }
+        case 'edit_text_apply_result': {
+            handleEditTextApplyResult(data)
             break
         }
         default: {

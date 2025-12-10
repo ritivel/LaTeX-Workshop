@@ -26,6 +26,9 @@ type PDFViewerPage = {
     },
     canvas: HTMLCanvasElement | undefined,
     div: HTMLDivElement,
+    textLayer?: {
+        textDivs?: HTMLElement[]
+    },
     getPagePoint(x: number, y: number): [number, number],
     get renderingState(): RenderingStates
 }
@@ -49,6 +52,17 @@ export type PDFViewerApplicationType = {
     },
     initializedPromise: Promise<void>,
     isViewerEmbedded: boolean,
+    pdfDocument?: {
+        getPage(pageNumber: number): Promise<{
+            getTextContent(options?: { disableNormalization?: boolean }): Promise<{
+                items: Array<{
+                    str?: string,
+                    transform?: number[],
+                    hasEOL?: boolean
+                }>
+            }>
+        }>
+    },
     pdfViewer: {
         _currentScale: number,
         _getVisiblePages(): { first: number, last: number, views: { id: number, x: number, y: number, view: PDFViewerPage, percent: number }[], ids: Set<number> },

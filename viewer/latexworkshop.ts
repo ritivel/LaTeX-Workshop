@@ -7,6 +7,8 @@ import { doneRefresh, restoreState } from './components/refresh.js'
 import { initUploadState, setParams, uploadState } from './components/state.js'
 import { initConnect, send } from './components/connection.js'
 import { registerSyncTeX } from './components/synctex.js'
+import { registerTextEditing } from './components/texteditor.js'
+import { registerAddToCline } from './components/addtocline.js'
 
 declare const PDFViewerApplication: PDFViewerApplicationType
 declare const PDFViewerApplicationOptions: PDFViewerApplicationOptionsType
@@ -50,7 +52,7 @@ async function initialization() {
     document.addEventListener('webviewerloaded', () => {
         const color = utils.isPrefersColorSchemeDark(params.codeColorTheme) ? params.color.dark : params.color.light
         const options = {
-            annotationEditorMode: -1,
+            annotationEditorMode: 0, // Enable annotation editing (0 = NONE mode, but enables the UI)
             disablePreferences: true,
             enableScripting: false,
             // The following paths are requested from ./build/cmaps/, ./build/standard_fonts/, and ./build/wasm/
@@ -97,6 +99,8 @@ onPDFViewerEvent('pagesloaded', () => {
         .then(() => uploadState())
         .then(() => send({ type: 'loaded', pdfFileUri: utils.parseURL().pdfFileUri }))
     repositionAnnotation()
+    registerTextEditing()
+    registerAddToCline()
     doneRefresh()
 })
 onPDFViewerEvent('rotationchanging', () => setTrimCSS())

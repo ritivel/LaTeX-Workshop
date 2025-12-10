@@ -31,6 +31,17 @@ export type ServerResponse = {
     textBeforeSelection: string,
     textAfterSelection: string
 } | {
+    type: 'edit_text_request_result',
+    sourceFile: string,
+    line: number,
+    column: number,
+    text: string,
+    context?: string
+} | {
+    type: 'edit_text_apply_result',
+    success: boolean,
+    message?: string
+} | {
     type: 'reload'
 }
 
@@ -106,6 +117,26 @@ export type ClientRequest = {
     filePath: string,
     targetPdfFile: string,
     indicator: 'none' | 'circle' | 'rectangle'
+} | {
+    type: 'edit_text_request',
+    pdfFileUri: string,
+    page: number,
+    pos: [number, number],
+    selectedText?: string
+} | {
+    type: 'edit_text_apply',
+    pdfFileUri: string,
+    sourceFile: string,
+    line: number,
+    column: number,
+    oldText: string,
+    newText: string
+} | {
+    type: 'add_to_cline',
+    pdfFileUri: string,
+    selectedText: string,
+    pos: [number, number],
+    page: number
 }
 
 export type PanelManagerResponse = {
@@ -121,6 +152,9 @@ export type PanelRequest = {
 } | {
     type: 'state',
     state: PdfViewerState
+} | {
+    type: 'execute_command',
+    command: string
 }
 
 export type PdfViewerState = {

@@ -5734,6 +5734,7 @@
   --toolbarButton-editorInk-icon:url(images/toolbarButton-editorInk.svg);
   --toolbarButton-editorStamp-icon:url(images/toolbarButton-editorStamp.svg);
   --toolbarButton-editorSignature-icon:url(images/toolbarButton-editorSignature.svg);
+  --toolbarButton-textEditing-icon:url(images/editor-toolbar-edit.svg);
   --toolbarButton-menuArrow-icon:url(images/toolbarButton-menuArrow.svg);
   --toolbarButton-sidebarToggle-icon:url(images/toolbarButton-sidebarToggle.svg);
   --toolbarButton-secondaryToolbarToggle-icon:url(images/toolbarButton-secondaryToolbarToggle.svg);
@@ -6326,6 +6327,11 @@ body.wait::before{
 #editorSignatureButton::before{
   -webkit-mask-image:var(--toolbarButton-editorSignature-icon);
           mask-image:var(--toolbarButton-editorSignature-icon);
+}
+
+#textEditingButton::before{
+  -webkit-mask-image:var(--toolbarButton-textEditing-icon);
+          mask-image:var(--toolbarButton-textEditing-icon);
 }
 
 #printButton::before{
