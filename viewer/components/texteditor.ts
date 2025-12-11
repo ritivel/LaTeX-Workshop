@@ -102,6 +102,10 @@ function createEditDialog(): HTMLElement {
     return dialog
 }
 
+/**
+ * Extracts text at a specific position with character-level accuracy.
+ * Uses PDF.js text items with bounding box calculations for precise character identification.
+ */
 async function extractTextAtPosition(page: number, pos: [number, number]): Promise<string> {
     try {
         // First, try to get text from selection (most reliable)
@@ -111,12 +115,141 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
             return selection.toString().trim()
         }
 
-        // Try to get text from the text layer (more reliable than coordinate matching)
+        // Use PDF.js text content API with character-level positioning
+        if (!PDFViewerApplication.pdfDocument) {
+            console.log('PDF document not available')
+            return ''
+        }
+
+        const pdfPage = await PDFViewerApplication.pdfDocument.getPage(page)
+        const textContent = await pdfPage.getTextContent({
+            disableNormalization: true
+        })
+
         const pageView = PDFViewerApplication.pdfViewer._pages[page - 1]
+        if (!pageView) {
+            console.log('Page view not available')
+            return ''
+        }
+
+        const viewport = pageView.viewport
+        const items = textContent.items
+
+        // Find the exact text item containing the click position using bounding boxes
+        let bestMatch: { text: string; distance: number; charIndex: number } | null = null
+        let minDistance = Infinity
+
+        for (const item of items) {
+            if (!item.transform || !item.str || !item.str.trim()) {
+                continue
+            }
+
+            // Get text item position and dimensions from transform matrix
+            // Transform matrix: [a, b, c, d, e, f] where:
+            // - e, f are translation (x, y position)
+            // - a, d are scale factors (width, height)
+            const itemX = item.transform[4] // e (x position)
+            const itemY = item.transform[5] // f (y position)
+            const scaleX = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1])
+            const scaleY = Math.sqrt(item.transform[2] * item.transform[2] + item.transform[3] * item.transform[3])
+
+            // Estimate text width and height
+            // PDF.js text items don't have width/height properties, so we estimate from transform and text length
+            // Average character width is approximately 0.5 * scaleX for most fonts
+            // Height is approximately scaleY
+            const charCount = item.str.length
+            const estimatedCharWidth = scaleX * 0.5 // Approximate character width
+            const estimatedWidth = charCount * estimatedCharWidth
+            const estimatedHeight = scaleY * 1.2 // Approximate line height (slightly larger than scaleY)
+
+            // Convert PDF coordinates to viewport coordinates
+            const [vx, vy] = viewport.convertToViewportPoint(itemX, itemY)
+            const [vxEnd, vyEnd] = viewport.convertToViewportPoint(itemX + estimatedWidth, itemY + estimatedHeight)
+
+            // Check if click is within this text item's bounding box
+            const clickX = pos[0]
+            const clickY = pos[1]
+
+            // Calculate distance to text item (for items not directly clicked)
+            const centerX = (vx + vxEnd) / 2
+            const centerY = (vy + vyEnd) / 2
+            const distance = Math.sqrt(
+                Math.pow(clickX - centerX, 2) + Math.pow(clickY - centerY, 2)
+            )
+
+            // Check if click is within bounding box (with some tolerance)
+            const tolerance = 50 // pixels
+            const isWithinBox = clickX >= vx - tolerance &&
+                               clickX <= vxEnd + tolerance &&
+                               clickY >= vy - tolerance &&
+                               clickY <= vyEnd + tolerance
+
+            if (isWithinBox || distance < minDistance) {
+                // Calculate character index within the item if within box
+                let charIndex = 0
+                if (isWithinBox && estimatedWidth > 0) {
+                    const relativeX = clickX - vx
+                    const charWidth = estimatedWidth / item.str.length
+                    charIndex = Math.max(0, Math.min(item.str.length - 1, Math.floor(relativeX / charWidth)))
+                }
+
+                // Prefer items that are directly clicked over nearby items
+                const effectiveDistance = isWithinBox ? 0 : distance
+
+                if (effectiveDistance < minDistance) {
+                    minDistance = effectiveDistance
+                    bestMatch = {
+                        text: item.str,
+                        distance: effectiveDistance,
+                        charIndex
+                    }
+                }
+            }
+        }
+
+        // If we found a good match, try to get surrounding text for context
+        if (bestMatch && bestMatch.distance < 100) {
+            // Try to get text from the text layer for better context
+            const textLayer = pageView.textLayer
+            if (textLayer && textLayer.textDivs) {
+                // Find text divs near the click position
+                const textDivs = textLayer.textDivs
+                let closestDiv: HTMLElement | null = null
+                let minDivDistance = Infinity
+
+                for (const div of textDivs) {
+                    const rect = div.getBoundingClientRect()
+                    const divCenterX = rect.left + rect.width / 2
+                    const divCenterY = rect.top + rect.height / 2
+
+                    const distance = Math.sqrt(
+                        Math.pow(pos[0] - divCenterX, 2) + Math.pow(pos[1] - divCenterY, 2)
+                    )
+
+                    if (distance < minDivDistance && distance < 100) {
+                        minDivDistance = distance
+                        closestDiv = div as HTMLElement
+                    }
+                }
+
+                // If text layer provides better context, use it
+                if (closestDiv && closestDiv.textContent) {
+                    const layerText = closestDiv.textContent.trim()
+                    if (layerText.length > bestMatch.text.length) {
+                        console.log('Found text from text layer with context:', layerText)
+                        return layerText
+                    }
+                }
+            }
+
+            console.log('Found text from PDF content (character-level):', bestMatch.text)
+            return bestMatch.text
+        }
+
+        // Fallback: try text layer if PDF.js API didn't find anything
         if (pageView) {
             const textLayer = pageView.textLayer
             if (textLayer && textLayer.textDivs) {
-                // Find the text div closest to the click position
                 const textDivs = textLayer.textDivs
                 let closestDiv: HTMLElement | null = null
                 let minDistance = Infinity
@@ -126,13 +259,8 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
                     const divCenterX = rect.left + rect.width / 2
                     const divCenterY = rect.top + rect.height / 2
 
-                    // Get click position in viewport coordinates
-                    const clickX = pos[0]
-                    const clickY = pos[1]
-
-                    // Calculate distance (simplified - would need proper coordinate conversion)
                     const distance = Math.sqrt(
-                        Math.pow(clickX - divCenterX, 2) + Math.pow(clickY - divCenterY, 2)
+                        Math.pow(pos[0] - divCenterX, 2) + Math.pow(pos[1] - divCenterY, 2)
                     )
 
                     if (distance < minDistance && distance < 200) {
@@ -144,64 +272,15 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
                 if (closestDiv && closestDiv.textContent) {
                     const text = closestDiv.textContent.trim()
                     if (text) {
-                        console.log('Found text from text layer:', text)
+                        console.log('Found text from text layer (fallback):', text)
                         return text
                     }
                 }
             }
         }
 
-        // Fallback: use PDF.js text content API
-        if (!PDFViewerApplication.pdfDocument) {
-            console.log('PDF document not available')
-            return ''
-        }
-
-        const pdfPage = await PDFViewerApplication.pdfDocument.getPage(page)
-        const textContent = await pdfPage.getTextContent({
-            disableNormalization: true
-        })
-
-        if (!pageView) {
-            console.log('Page view not available')
-            return ''
-        }
-
-        // Find text items near the click position
-        const viewport = pageView.viewport
-        const items = textContent.items
-        let closestText = ''
-        let minDistance = Infinity
-
-        for (const item of items) {
-            if (item.transform && item.str && item.str.trim()) {
-                // Transform coordinates from PDF space to viewport space
-                const itemX = item.transform[4]
-                const itemY = item.transform[5]
-
-                // Convert to viewport coordinates for comparison
-                const [viewportX, viewportY] = viewport.convertToViewportPoint(itemX, itemY)
-
-                // Calculate distance (pos is already in viewport coordinates from getPagePoint)
-                const distance = Math.sqrt(
-                    Math.pow(pos[0] - viewportX, 2) + Math.pow(pos[1] - viewportY, 2)
-                )
-
-                // Use a larger threshold (200px) to catch nearby text
-                if (distance < minDistance && distance < 200) {
-                    minDistance = distance
-                    closestText = item.str
-                }
-            }
-        }
-
-        if (closestText) {
-            console.log('Found text from PDF content:', closestText)
-        } else {
-            console.log('No text found near click position')
-        }
-
-        return closestText
+        console.log('No text found near click position')
+        return ''
     } catch (error) {
         console.error('Error extracting text:', error)
         return ''

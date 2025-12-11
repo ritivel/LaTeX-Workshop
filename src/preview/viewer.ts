@@ -454,7 +454,12 @@ async function handleEditTextApply(websocket: ws, data: Extract<ClientRequest, {
             await vscode.workspace.applyEdit(edit)
             await document.save()
         } else {
-            // Use the matched position
+            // Use the matched position (with improved confidence-based selection)
+            // If confidence is low, log a warning but still attempt the edit
+            if (match.confidence < 0.7) {
+                logger.log(`Low confidence match (${match.confidence.toFixed(2)}) for text replacement`)
+            }
+
             const range = new vscode.Range(
                 match.line,
                 match.column,

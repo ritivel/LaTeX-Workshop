@@ -2869,6 +2869,12 @@
           "type": "number",
           "default": 20000,
           "markdownDescription": "Delay to wait for GitHub Codespaces Authentication of port forwarding to be resolved, in milliseconds."
+        },
+        "latex-workshop.view.pdf.textEditing.enabled": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable text editing in PDF viewer. When enabled, you can click on text in the PDF to edit it, and changes will be applied to the LaTeX source file with automatic recompilation."
         }
       }
     },
