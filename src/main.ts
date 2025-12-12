@@ -66,8 +66,8 @@ export function activate(extensionContext: vscode.ExtensionContext) {
         log.logConfigChange(ev)
     }))
 
-    extensionContext.subscriptions.push(vscode.workspace.onDidSaveTextDocument( (e: vscode.TextDocument) => {
-        if (!lw.constant.FILE_URI_SCHEMES.includes(e.uri.scheme)){
+    extensionContext.subscriptions.push(vscode.workspace.onDidSaveTextDocument((e: vscode.TextDocument) => {
+        if (!lw.constant.FILE_URI_SCHEMES.includes(e.uri.scheme)) {
             return
         }
         if (lw.file.hasLaTeXLangId(e.languageId) || lw.file.hasLaTeXClassPackageLangId(e.languageId) ||
@@ -112,7 +112,7 @@ export function activate(extensionContext: vscode.ExtensionContext) {
         if (e && (
             lw.file.hasLaTeXLangId(e.document.languageId)
             || lw.file.hasBibLangId(e.document.languageId)
-            || lw.file.hasLaTeXClassPackageLangId(e.document.languageId) )) {
+            || lw.file.hasLaTeXClassPackageLangId(e.document.languageId))) {
             if (!lw.file.hasBibLangId(e.document.languageId) && (e.document.fileName !== lw.previousActive?.document.fileName)) {
                 await lw.root.find()
                 lw.lint.latex.root()
@@ -123,7 +123,7 @@ export function activate(extensionContext: vscode.ExtensionContext) {
             return
         }
 
-        if ( lw.file.hasLaTeXLangId(e.document.languageId)
+        if (lw.file.hasLaTeXLangId(e.document.languageId)
             || lw.file.hasBibLangId(e.document.languageId)
             || lw.file.hasDtxLangId(e.document.languageId)) {
             void lw.outline.refresh()
@@ -131,7 +131,7 @@ export function activate(extensionContext: vscode.ExtensionContext) {
     }))
 
     extensionContext.subscriptions.push(vscode.workspace.onDidChangeTextDocument((e: vscode.TextDocumentChangeEvent) => {
-        if (!lw.constant.FILE_URI_SCHEMES.includes(e.document.uri.scheme)){
+        if (!lw.constant.FILE_URI_SCHEMES.includes(e.document.uri.scheme)) {
             return
         }
         if (!lw.file.hasLaTeXWorkshopLangId(e.document.languageId)) {
@@ -168,7 +168,8 @@ function registerLatexWorkshopCommands(extensionContext: vscode.ExtensionContext
     extensionContext.subscriptions.push(
         vscode.commands.registerCommand('latex-workshop.hostPort', () => lw.commands.hostPort()),
         vscode.commands.registerCommand('latex-workshop.saveWithoutBuilding', () => lw.commands.saveActive()),
-        vscode.commands.registerCommand('latex-workshop.build', () => lw.commands.build()),
+        vscode.commands.registerCommand('latex-workshop.build', (skipSelection?: boolean, rootFile?: string, languageId?: string, recipe?: string) =>
+            lw.commands.build(skipSelection, rootFile, languageId, recipe)),
         vscode.commands.registerCommand('latex-workshop.recipes', (recipe: string | undefined) => lw.commands.recipes(recipe)),
         vscode.commands.registerCommand('latex-workshop.view', (uri: vscode.Uri) => lw.commands.view(uri)),
         vscode.commands.registerCommand('latex-workshop.refresh-viewer', () => lw.commands.refresh()),
@@ -263,7 +264,7 @@ function registerProviders(extensionContext: vscode.ExtensionContext) {
 
     extensionContext.subscriptions.push(
         vscode.window.registerWebviewPanelSerializer('latex-workshop-pdf', lw.viewer.serializer),
-        vscode.window.registerCustomEditorProvider('latex-workshop-pdf-hook', lw.viewer.hook, {supportsMultipleEditorsPerDocument: true, webviewOptions: {retainContextWhenHidden: true}}),
+        vscode.window.registerCustomEditorProvider('latex-workshop-pdf-hook', lw.viewer.hook, { supportsMultipleEditorsPerDocument: true, webviewOptions: { retainContextWhenHidden: true } }),
         vscode.window.registerWebviewPanelSerializer('latex-workshop-mathpreview', lw.preview.mathpreview.serializer)
     )
 
@@ -277,8 +278,8 @@ function registerProviders(extensionContext: vscode.ExtensionContext) {
     )
 
     extensionContext.subscriptions.push(
-        vscode.languages.registerCompletionItemProvider({ scheme: 'file', language: 'tex'}, lw.completion.provider, '\\', '{'),
-        vscode.languages.registerCompletionItemProvider({ scheme: 'vsls', language: 'tex'}, lw.completion.provider, '\\', '{'),
+        vscode.languages.registerCompletionItemProvider({ scheme: 'file', language: 'tex' }, lw.completion.provider, '\\', '{'),
+        vscode.languages.registerCompletionItemProvider({ scheme: 'vsls', language: 'tex' }, lw.completion.provider, '\\', '{'),
         vscode.languages.registerCompletionItemProvider(bibtexSelector, lw.completion.bibProvider, '@')
     )
 
@@ -326,7 +327,7 @@ function registerProviders(extensionContext: vscode.ExtensionContext) {
 
     const selectionLatex = configuration.get('selection.smart.latex.enabled', true)
     if (selectionLatex) {
-        extensionContext.subscriptions.push(vscode.languages.registerSelectionRangeProvider({language: 'latex'}, lw.language.selectionRage))
+        extensionContext.subscriptions.push(vscode.languages.registerSelectionRangeProvider({ language: 'latex' }, lw.language.selectionRage))
     }
 
     extensionContext.subscriptions.push(
@@ -348,8 +349,8 @@ function conflictCheck() {
 }
 
 function selectDocumentsWithId(ids: string[]): vscode.DocumentSelector {
-   const selector = ids.map( (id) => {
-       return { scheme: lw.file.toUri('').scheme, language: id }
-   })
-   return selector
+    const selector = ids.map((id) => {
+        return { scheme: lw.file.toUri('').scheme, language: id }
+    })
+    return selector
 }

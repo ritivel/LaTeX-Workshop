@@ -37,18 +37,17 @@ export function parseURL(): { encodedPath: string, pdfFileUri: string, docTitle:
     if (urlComponents) {
         return urlComponents
     }
-    const query = document.location.search.substring(1)
-    const parts = query.split('&')
+    const params = new URLSearchParams(document.location.search)
 
-    for (let i = 0, ii = parts.length; i < ii; ++i) {
-        const param = parts[i].split('=')
-        if (['file', 'vsls'].includes(param[0].toLowerCase())) {
-            const encodedPath = param[1].replace(pdfFilePrefix, '')
-            const pdfFileUri = decodePath(encodedPath)
-            const docTitle = pdfFileUri.split(/[\\/]/).pop() ?? 'Untitled PDF'
-            urlComponents = { encodedPath, pdfFileUri, docTitle }
-            return urlComponents
-        }
+    // Check for 'file' or 'vsls' parameter
+    const fileParam = params.get('file') || params.get('vsls')
+    if (fileParam) {
+        // URLSearchParams automatically decodes the parameter value
+        const encodedPath = fileParam.replace(pdfFilePrefix, '')
+        const pdfFileUri = decodePath(encodedPath)
+        const docTitle = pdfFileUri.split(/[\\/]/).pop() ?? 'Untitled PDF'
+        urlComponents = { encodedPath, pdfFileUri, docTitle }
+        return urlComponents
     }
     throw new Error('file not given in the query.')
 }

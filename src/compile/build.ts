@@ -37,7 +37,7 @@ function autoBuild(file: string, type: 'onFileChange' | 'onSave', bibChanged: bo
         return
     }
     logger.log('Auto build started ' + (type === 'onFileChange' ? 'detecting the change of a file' : 'on saving file') + `: ${file} .`)
-    lw.event.fire(lw.event.AutoBuildInitiated, {type, file})
+    lw.event.fire(lw.event.AutoBuildInitiated, { type, file })
     if (!canAutoBuild()) {
         logger.log('Autobuild temporarily disabled.')
         return
@@ -101,29 +101,55 @@ let isBuilding = false
  */
 async function build(skipSelection: boolean = false, rootFile: string | undefined = undefined, languageId: string | undefined = undefined, recipe: string | undefined = undefined) {
     const activeEditor = vscode.window.activeTextEditor
-    if (!activeEditor) {
-        logger.log('Cannot start to build because the active editor is undefined.')
+
+    // Allow building if rootFile is provided, even without active editor
+    if (!activeEditor && !rootFile) {
+        logger.log('Cannot start to build because the active editor is undefined and no rootFile was provided.')
         return
     }
 
-    logger.log(`The document of the active editor: ${activeEditor.document.uri.toString(true)}`)
-    logger.log(`The languageId of the document: ${activeEditor.document.languageId}`)
-    const workspace = rootFile ? lw.file.toUri(rootFile) : activeEditor.document.uri
+    logger.log(`The document of the active editor: ${activeEditor?.document.uri.toString(true) || 'none'}`)
+    logger.log(`The languageId of the document: ${activeEditor?.document.languageId || 'none'}`)
+    const workspace = rootFile ? lw.file.toUri(rootFile) : (activeEditor?.document.uri || vscode.workspace.workspaceFolders?.[0]?.uri)
     const configuration = vscode.workspace.getConfiguration('latex-workshop', workspace)
     const externalBuildCommand = configuration.get('latex.external.build.command') as string
     const externalBuildArgs = configuration.get('latex.external.build.args') as string[]
 
-    if (rootFile === undefined && lw.file.hasLaTeXLangId(activeEditor.document.languageId)) {
+    if (rootFile === undefined && activeEditor && lw.file.hasLaTeXLangId(activeEditor.document.languageId)) {
         await lw.root.find()
         rootFile = lw.root.file.path
         languageId = lw.root.file.langId
     }
+
+    // If we have rootFile but no activeEditor, we need to set up the root file context
+    if (rootFile && !activeEditor) {
+        // Open the document to ensure LaTeX Workshop can detect it
+        try {
+            const uri = lw.file.toUri(rootFile)
+            await vscode.workspace.openTextDocument(uri)
+            // Find root file to set up context
+            await lw.root.find()
+        } catch (error) {
+            logger.log(`Error opening root file ${rootFile}: ${error}`)
+        }
+    }
+
+    // If we have rootFile but no languageId, try to determine it from the file extension
+    if (rootFile && !languageId) {
+        // Default to 'latex' for .tex files, can be extended for other types
+        languageId = rootFile.endsWith('.tex') ? 'latex' : 'latex'
+    }
+
     if (externalBuildCommand) {
         // Check if a build is already in progress
         if (isBuilding) {
             void logger.showErrorMessageWithCompilerLogButton('Please wait for the current build to finish.')
         } else {
-            const pwd = path.dirname(rootFile ? rootFile : activeEditor.document.fileName)
+            const pwd = path.dirname(rootFile || (activeEditor ? activeEditor.document.fileName : ''))
+            if (!pwd) {
+                logger.log('Cannot determine working directory for external build.')
+                return
+            }
             await buildExternal(externalBuildCommand, externalBuildArgs, pwd, buildLoop, rootFile)
         }
         return
@@ -137,7 +163,7 @@ async function build(skipSelection: boolean = false, rootFile: string | undefine
     if (!skipSelection && lw.root.subfiles.path) {
         // We are using the subfile package
         pickedRootFile = await pickRootPath(rootFile, lw.root.subfiles.path, 'compile')
-        if (! pickedRootFile) {
+        if (!pickedRootFile) {
             return
         }
     }
@@ -227,9 +253,9 @@ function spawnProcess(step: Step): ProcessEnv {
         const args = step.args
         if (args && !step.name.endsWith(lw.constant.MAGIC_PROGRAM_ARGS_SUFFIX)) {
             // All optional arguments are given as a unique string (% !TeX options) if any, so we use {shell: true}
-            lw.compile.process = lw.external.spawn(`${step.command} ${args[0]}`, [], {cwd: path.dirname(step.rootFile), env, shell: true})
+            lw.compile.process = lw.external.spawn(`${step.command} ${args[0]}`, [], { cwd: path.dirname(step.rootFile), env, shell: true })
         } else {
-            lw.compile.process = lw.external.spawn(step.command, args ?? [], {cwd: path.dirname(step.rootFile), env})
+            lw.compile.process = lw.external.spawn(step.command, args ?? [], { cwd: path.dirname(step.rootFile), env })
         }
     } else if (!step.isExternal) {
         let cwd = path.dirname(step.rootFile)
@@ -237,10 +263,10 @@ function spawnProcess(step: Step): ProcessEnv {
             cwd = lw.root.dir.path
         }
         logger.log(`cwd: ${cwd}`)
-        lw.compile.process = lw.external.spawn(step.command, step.args ?? [], {cwd, env})
+        lw.compile.process = lw.external.spawn(step.command, step.args ?? [], { cwd, env })
     } else {
         logger.log(`cwd: ${step.cwd}`)
-        lw.compile.process = lw.external.spawn(step.command, step.args ?? [], {cwd: step.cwd})
+        lw.compile.process = lw.external.spawn(step.command, step.args ?? [], { cwd: step.cwd })
     }
     logger.log(`LaTeX build process spawned with PID ${lw.compile.process.pid}.`)
     return env
