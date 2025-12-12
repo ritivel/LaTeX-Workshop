@@ -127,8 +127,29 @@ async function build(skipSelection: boolean = false, rootFile: string | undefine
         try {
             const uri = lw.file.toUri(rootFile)
             await vscode.workspace.openTextDocument(uri)
-            // Find root file to set up context
-            await lw.root.find()
+
+            // Directly set the root file instead of relying on find() which requires active editor
+            // This allows building without opening the .tex file in the editor
+            if (lw.root.file.path !== rootFile) {
+                logger.log(`Setting root file directly: ${rootFile}`)
+                lw.root.file.path = rootFile
+                lw.root.file.langId = languageId || lw.file.getLangId(rootFile)
+                lw.root.dir.path = path.dirname(rootFile)
+
+                // Fire events and set up cache like find() does
+                lw.event.fire(lw.event.RootFileChanged, rootFile)
+                lw.completion.input.reset()
+                lw.lint.label.reset()
+                lw.cache.reset()
+                lw.cache.add(rootFile)
+                void lw.cache.refreshCache(rootFile).then(async () => {
+                    await lw.cache.loadFlsFile(rootFile)
+                })
+                lw.event.fire(lw.event.RootFileSearched)
+            } else {
+                // Root file already set, just ensure context is refreshed
+                await lw.root.find()
+            }
         } catch (error) {
             logger.log(`Error opening root file ${rootFile}: ${error}`)
         }
