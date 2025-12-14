@@ -68,7 +68,7 @@ function initParserState(rootFile: string): ParserState {
         currentResult: { type: '', file: '', text: '', line: 1 },
         nested: 0,
         rootFile,
-        fileStack: [ rootFile ]
+        fileStack: [rootFile]
     }
 }
 
@@ -85,12 +85,17 @@ function parse(log: string, rootFile?: string) {
     buildLog.length = 0
 
     const state = initParserState(rootFile)
-    for(const line of lines) {
+    for (const line of lines) {
         parseLine(line, state)
     }
 
     // Push the final result
-    if (state.currentResult.type !== '' && !state.currentResult.text.match(bibEmpty)) {
+    // `text` is typed as string but may be undefined at runtime if a regex match
+    // branch assigns an out-of-range capture group. Be defensive to avoid crashing
+    // the extension host.
+    const finalText = (state.currentResult as { text?: string }).text ?? ''
+    state.currentResult.text = finalText
+    if (state.currentResult.type !== '' && !finalText.match(bibEmpty)) {
         buildLog.push(state.currentResult)
     }
     logger.log(`Logged ${buildLog.length} messages.`)
@@ -101,7 +106,8 @@ function parseLine(line: string, state: ParserState) {
     const configuration = vscode.workspace.getConfiguration('latex-workshop')
     let excludeRegexp: RegExp[]
     try {
-        excludeRegexp = (configuration.get('message.latexlog.exclude') as string[]).map(regexp => RegExp(regexp))
+        const excludes = configuration.get<string[]>('message.latexlog.exclude') ?? []
+        excludeRegexp = excludes.map(regexp => RegExp(regexp))
     } catch (e) {
         logger.logError('Invalid message.latexlog.exclude config.', e)
         return
@@ -162,7 +168,8 @@ function parseLine(line: string, state: ParserState) {
             type: 'error',
             file: filename,
             line: 1,
-            text: result[1]
+            // `latexNoPageOutput` has no capture group, so use the whole match.
+            text: result[0]
         }
         state.searchEmptyLine = false
         return

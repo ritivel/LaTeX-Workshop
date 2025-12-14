@@ -98,3 +98,9 @@ export function hasBundledTectonic(): boolean {
     return fs.existsSync(bundledPath)
 }
 
+
+
+
+
+
+

@@ -42,3 +42,9 @@ To update to a newer version of Tectonic:
 2. Run `npm run download-tectonic` to download the new binaries
 3. Test the extension to ensure compatibility
 
+
+
+
+
+
+

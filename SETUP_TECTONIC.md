@@ -104,3 +104,9 @@ To update to a newer version of Tectonic:
 3. Test the extension to ensure compatibility
 4. Update the version in `package.json` if needed
 
+
+
+
+
+
+
