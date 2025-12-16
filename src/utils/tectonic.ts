@@ -6,8 +6,8 @@ import { lw } from '../lw'
 const logger = lw.log('Tectonic')
 
 interface PlatformInfo {
-    platform: string
-    arch: string
+    platform: string,
+    arch: string,
     binaryName: string
 }
 
@@ -97,10 +97,5 @@ export function hasBundledTectonic(): boolean {
     )
     return fs.existsSync(bundledPath)
 }
-
-
-
-
-
 
 

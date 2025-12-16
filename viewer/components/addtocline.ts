@@ -5,9 +5,9 @@ import * as utils from './utils.js'
 declare const PDFViewerApplication: PDFViewerApplicationType
 
 let lastSelection: {
-    text: string
-    page: number
-    pos: [number, number]
+    text: string,
+    page: number,
+    pos: [number, number],
     rect: DOMRect
 } | null = null
 
@@ -104,7 +104,7 @@ function hideButton() {
 /**
  * Get the page number and position for a given selection range
  */
-function getSelectionInfo(selection: Selection): { page: number; pos: [number, number]; rect: DOMRect } | null {
+function getSelectionInfo(selection: Selection): { page: number, pos: [number, number], rect: DOMRect } | null {
     if (selection.rangeCount === 0) {
         return null
     }

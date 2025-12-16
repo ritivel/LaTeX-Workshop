@@ -7,9 +7,12 @@ declare const PDFViewerApplication: PDFViewerApplicationType
 let textEditingEnabled = false
 let editDialog: HTMLElement | null = null
 let currentEditData: {
-    page: number
-    pos: [number, number]
-    selectedText: string
+    page: number,
+    pos: [number, number],
+    selectedText: string,
+    sourceFile?: string,
+    line?: number,
+    column?: number
 } | null = null
 
 export function isTextEditingEnabled(): boolean {
@@ -136,7 +139,7 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
         const items = textContent.items
 
         // Find the exact text item containing the click position using bounding boxes
-        let bestMatch: { text: string; distance: number; charIndex: number } | null = null
+        let bestMatch: { text: string, distance: number, charIndex: number } | null = null
         let minDistance = Infinity
 
         for (const item of items) {
@@ -252,7 +255,7 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
             if (textLayer && textLayer.textDivs) {
                 const textDivs = textLayer.textDivs
                 let closestDiv: HTMLElement | null = null
-                let minDistance = Infinity
+                let closestDistance = Infinity
 
                 for (const div of textDivs) {
                     const rect = div.getBoundingClientRect()
@@ -263,8 +266,8 @@ async function extractTextAtPosition(page: number, pos: [number, number]): Promi
                         Math.pow(pos[0] - divCenterX, 2) + Math.pow(pos[1] - divCenterY, 2)
                     )
 
-                    if (distance < minDistance && distance < 200) {
-                        minDistance = distance
+                    if (distance < closestDistance && distance < 200) {
+                        closestDistance = distance
                         closestDiv = div as HTMLElement
                     }
                 }
@@ -324,9 +327,9 @@ async function applyTextEdit(oldText: string, newText: string) {
     }
 
     // Get source location from stored data (set by handleEditTextRequestResult)
-    let sourceFile = (currentEditData as any).sourceFile || ''
-    let line = (currentEditData as any).line ?? 0
-    let column = (currentEditData as any).column ?? 0
+    let sourceFile = currentEditData.sourceFile || ''
+    let line = currentEditData.line ?? 0
+    let column = currentEditData.column ?? 0
 
     // If no source location was found, we need to find it first
     if (!sourceFile && oldText) {
@@ -343,9 +346,9 @@ async function applyTextEdit(oldText: string, newText: string) {
         await new Promise(resolve => setTimeout(resolve, 1000))
 
         // Check again
-        sourceFile = (currentEditData as any).sourceFile || ''
-        line = (currentEditData as any).line ?? 0
-        column = (currentEditData as any).column ?? 0
+        sourceFile = currentEditData.sourceFile || ''
+        line = currentEditData.line ?? 0
+        column = currentEditData.column ?? 0
     }
 
     if (!sourceFile) {
@@ -448,10 +451,10 @@ function showEditDialog(text: string, page: number, pos: [number, number]) {
 }
 
 export function handleEditTextRequestResult(data: {
-    sourceFile: string
-    line: number
-    column: number
-    text: string
+    sourceFile: string,
+    line: number,
+    column: number,
+    text: string,
     context?: string
 }) {
     const statusEl = document.getElementById('textEditDialogStatus')
@@ -468,7 +471,7 @@ export function handleEditTextRequestResult(data: {
     }
 }
 
-export function handleEditTextApplyResult(data: { success: boolean; message?: string }) {
+export function handleEditTextApplyResult(data: { success: boolean, message?: string }) {
     const statusEl = document.getElementById('textEditDialogStatus')
     if (statusEl) {
         if (data.success) {
@@ -482,7 +485,7 @@ export function handleEditTextApplyResult(data: { success: boolean; message?: st
 }
 
 // Store handlers to avoid duplicates
-const textEditingHandlers = new WeakMap<HTMLElement, (e: MouseEvent) => void>()
+const textEditingHandlers = new WeakMap<HTMLElement,(e: MouseEvent) => void>()
 
 export function registerTextEditing() {
     // This will be called from latexworkshop.ts after pages are loaded

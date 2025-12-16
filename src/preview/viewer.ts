@@ -417,9 +417,9 @@ async function handleEditTextApply(websocket: ws, data: Extract<ClientRequest, {
         }
 
         // If source file not provided, try to get it from SyncTeX
-        let sourceFile = data.sourceFile
-        let line = data.line
-        let column = data.column
+        const sourceFile = data.sourceFile
+        const line = data.line
+        const column = data.column
 
         if (!sourceFile || line === 0) {
             // Try to get from SyncTeX - we'd need the position, but for now use the provided data
@@ -593,7 +593,7 @@ async function handleAddToCline(data: Extract<ClientRequest, { type: 'add_to_cli
         // Try to find the selected text in the source to get exact range
         // Start from the line indicated by SyncTeX
         let startChar = Math.max(0, record.column > 0 ? record.column - 1 : 0)
-        let endLine = startLine
+        const endLine = startLine
         let endChar = startChar
 
         // Try to find the selected text in the source
@@ -602,7 +602,7 @@ async function handleAddToCline(data: Extract<ClientRequest, { type: 'add_to_cli
 
         // Search for the text starting from the column position
         const searchStart = Math.min(startChar, lineText.length)
-        let foundIndex = lineText.substring(searchStart).toLowerCase().indexOf(normalizedSelectedText.toLowerCase().substring(0, Math.min(50, normalizedSelectedText.length)))
+        const foundIndex = lineText.substring(searchStart).toLowerCase().indexOf(normalizedSelectedText.toLowerCase().substring(0, Math.min(50, normalizedSelectedText.length)))
 
         if (foundIndex >= 0) {
             startChar = searchStart + foundIndex
@@ -620,10 +620,10 @@ async function handleAddToCline(data: Extract<ClientRequest, { type: 'add_to_cli
                 filePath: record.input,
                 language: 'latex',
                 range: {
-                    startLine: startLine,
-                    startChar: startChar,
-                    endLine: endLine,
-                    endChar: endChar
+                    startLine,
+                    startChar,
+                    endLine,
+                    endChar
                 }
             })
             logger.log(`Added PDF selection to Cline: ${data.selectedText.substring(0, 50)}... from ${record.input}:${record.line}`)
