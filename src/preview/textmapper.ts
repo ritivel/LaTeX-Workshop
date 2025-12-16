@@ -19,7 +19,7 @@ export class TextMapper {
         sourceText: string,
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string; confidence: number } | null {
+    ): { line: number, column: number, text: string, confidence: number } | null {
         // Normalize PDF text: remove extra whitespace, normalize line breaks
         const normalizedPdfText = this.normalizeText(pdfText)
 
@@ -31,8 +31,8 @@ export class TextMapper {
         const lines = sourceText.split(/\r?\n/)
 
         // Start searching from the given position
-        let searchStartLine = Math.max(0, startLine)
-        let searchStartColumn = Math.max(0, startColumn)
+        const searchStartLine = Math.max(0, startLine)
+        const searchStartColumn = Math.max(0, startColumn)
 
         // Try exact match first (highest confidence)
         const exactMatch = this.findExactMatch(normalizedPdfText, lines, searchStartLine, searchStartColumn)
@@ -90,10 +90,10 @@ export class TextMapper {
     private static levenshteinDistance(str1: string, str2: string): number {
         const m = str1.length
         const n = str2.length
-        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+        const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0))
 
-        for (let i = 0; i <= m; i++) dp[i][0] = i
-        for (let j = 0; j <= n; j++) dp[0][j] = j
+        for (let i = 0; i <= m; i++) { dp[i][0] = i }
+        for (let j = 0; j <= n; j++) { dp[0][j] = j }
 
         for (let i = 1; i <= m; i++) {
             for (let j = 1; j <= n; j++) {
@@ -116,7 +116,7 @@ export class TextMapper {
      */
     private static similarity(str1: string, str2: string): number {
         const maxLen = Math.max(str1.length, str2.length)
-        if (maxLen === 0) return 1.0
+        if (maxLen === 0) { return 1.0 }
         const distance = this.levenshteinDistance(str1, str2)
         return 1 - (distance / maxLen)
     }
@@ -127,7 +127,7 @@ export class TextMapper {
     private static longestCommonSubsequence(str1: string, str2: string): string {
         const m = str1.length
         const n = str2.length
-        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+        const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0))
 
         for (let i = 1; i <= m; i++) {
             for (let j = 1; j <= n; j++) {
@@ -140,7 +140,7 @@ export class TextMapper {
         }
 
         // Reconstruct LCS
-        let i = m, j = n
+        let i = m; let j = n
         const lcs: string[] = []
         while (i > 0 && j > 0) {
             if (str1[i - 1] === str2[j - 1]) {
@@ -166,10 +166,10 @@ export class TextMapper {
         matchScore: number = 2,
         mismatchPenalty: number = -1,
         gapPenalty: number = -1
-    ): { score: number; pdfStart: number; sourceStart: number; length: number } {
+    ): { score: number, pdfStart: number, sourceStart: number, length: number } {
         const m = pdfText.length
         const n = sourceText.length
-        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0))
+        const dp: number[][] = Array.from({ length: m + 1 }, () => Array<number>(n + 1).fill(0))
 
         let maxScore = 0
         let maxI = 0
@@ -228,8 +228,8 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string; confidence: number } | null {
-        let bestMatch: { line: number; column: number; text: string; confidence: number } | null = null
+    ): { line: number, column: number, text: string, confidence: number } | null {
+        let bestMatch: { line: number, column: number, text: string, confidence: number } | null = null
         let bestScore = 0
 
         // Search in a window around the start position
@@ -281,8 +281,8 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string; confidence: number } | null {
-        let bestMatch: { line: number; column: number; text: string; confidence: number } | null = null
+    ): { line: number, column: number, text: string, confidence: number } | null {
+        let bestMatch: { line: number, column: number, text: string, confidence: number } | null = null
         let bestConfidence = 0
 
         const searchWindow = 10
@@ -331,8 +331,8 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string; confidence: number } | null {
-        let bestMatch: { line: number; column: number; text: string; confidence: number } | null = null
+    ): { line: number, column: number, text: string, confidence: number } | null {
+        let bestMatch: { line: number, column: number, text: string, confidence: number } | null = null
         let bestScore = 0
 
         const searchWindow = 10
@@ -383,7 +383,7 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string } | null {
+    ): { line: number, column: number, text: string } | null {
         // Search from start position
         for (let lineIdx = startLine; lineIdx < lines.length; lineIdx++) {
             const line = lines[lineIdx]
@@ -417,7 +417,7 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string } | null {
+    ): { line: number, column: number, text: string } | null {
         const words = normalizedText.split(/\s+/).filter(w => w.length > 0)
         if (words.length === 0) {
             return null
@@ -468,7 +468,7 @@ export class TextMapper {
         lines: string[],
         startLine: number,
         startColumn: number
-    ): { line: number; column: number; text: string } | null {
+    ): { line: number, column: number, text: string } | null {
         // Remove LaTeX commands from source for matching
         for (let lineIdx = startLine; lineIdx < lines.length; lineIdx++) {
             const line = lines[lineIdx]
@@ -515,17 +515,17 @@ export class TextMapper {
 
             // Remove LaTeX commands with optional and required arguments
             // Pattern: \command*[optional]{required}
-            result = result.replace(/\\[a-zA-Z@]+\*?(\[[^\]]*\])*(\{[^\}]*\})*/g, '')
+            result = result.replace(/\\[a-zA-Z@]+\*?(\[[^\]]*\])*(\{[^}]*\})*/g, '')
 
             // Remove special LaTeX characters (but keep some that might be visible)
             result = result.replace(/\\([^a-zA-Z@\s])/g, '$1')
 
             // Remove environment commands \begin{...}...\end{...}
-            result = result.replace(/\\begin\{[^\}]*\}[\s\S]*?\\end\{[^\}]*\}/g, '')
+            result = result.replace(/\\begin\{[^}]*\}[\s\S]*?\\end\{[^}]*\}/g, '')
 
             // Remove remaining standalone braces (but be careful with nested)
             // Only remove if they're clearly command arguments
-            result = result.replace(/\{[^\}]*\}/g, (match) => {
+            result = result.replace(/\{[^}]*\}/g, (match) => {
                 // Keep braces that might be visible content if they contain letters
                 if (/[a-zA-Z]/.test(match)) {
                     return match.slice(1, -1) // Remove outer braces, keep content
