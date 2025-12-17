@@ -298,7 +298,11 @@ function logConfigChange(ev: vscode.ConfigurationChangeEvent) {
 
 /**
  * Saves the compiler log to a file next to the .tex file.
- * The log file will be named <texBasename>.log in the same directory as the .tex file.
+ * The log file will be named <texBasename>.compile.log to avoid conflicts
+ * with the actual LaTeX .log file that LaTeX generates.
+ *
+ * Also checks for and removes any corrupted .log files that might have been
+ * created by a previous version of this code.
  *
  * @param {string} rootFile - Path to the root LaTeX file.
  */
@@ -308,15 +312,40 @@ async function saveCompilerLogToFile(rootFile: string) {
     }
 
     try {
-        const compilerLog = CACHED_COMPILER.join('')
-        if (!compilerLog || compilerLog.trim() === '' || compilerLog === 'Ready') {
+        const texDir = path.dirname(rootFile)
+        const texBasename = path.basename(rootFile, path.extname(rootFile))
+        const standardLogPath = path.join(texDir, `${texBasename}.log`)
+
+        // Check if there's a corrupted .log file from a previous version
+        // (files that start with "**" or "Ready" are likely corrupted)
+        try {
+            const logUri = vscode.Uri.file(standardLogPath)
+            const logContent = await vscode.workspace.fs.readFile(logUri)
+            const firstLine = logContent.toString().split('\n')[0].trim()
+
+            // If the log file doesn't start with a standard LaTeX log header,
+            // it's likely corrupted (created by our previous code)
+            if (firstLine.startsWith('**') || firstLine === 'Ready' ||
+                firstLine.includes('This message may duplicate')) {
+                logTagless(`Removing corrupted log file: ${standardLogPath}`)
+                await vscode.workspace.fs.delete(logUri)
+            }
+        } catch {
+            // File doesn't exist or can't be read - that's fine, continue
+        }
+
+        // Filter out the initial "Ready" message and any empty content
+        const compilerLog = CACHED_COMPILER
+            .filter(line => line.trim() !== '' && line !== 'Ready')
+            .join('')
+
+        if (!compilerLog || compilerLog.trim() === '') {
             // No meaningful log content to save
             return
         }
 
-        const texDir = path.dirname(rootFile)
-        const texBasename = path.basename(rootFile, path.extname(rootFile))
-        const logPath = path.join(texDir, `${texBasename}.log`)
+        // Use .compile.log extension to avoid conflicts with LaTeX's .log file
+        const logPath = path.join(texDir, `${texBasename}.compile.log`)
 
         // Write the log file
         await vscode.workspace.fs.writeFile(

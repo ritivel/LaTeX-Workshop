@@ -471,7 +471,7 @@ function handleExternalCommandError() {
     // Save compiler log to file even on error
     const rootFile = lw.root.file.path
     if (rootFile) {
-        void lw.log.saveCompilerLogToFile(rootFile)
+        void log.saveCompilerLogToFile(rootFile)
     }
 
     void logger.showErrorMessageWithCompilerLogButton('Build terminated with error.')
