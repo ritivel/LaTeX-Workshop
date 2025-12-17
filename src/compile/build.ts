@@ -4,6 +4,7 @@ import micromatch from 'micromatch'
 import * as path from 'path'
 import { pickRootPath } from '../utils/quick-pick'
 import { lw } from '../lw'
+import { log } from '../utils/logger'
 import type { ProcessEnv, RecipeStep, Step } from '../types'
 import { build as buildRecipe } from './recipe'
 import { build as buildExternal } from './external'
@@ -374,6 +375,13 @@ function handleProcessError(env: ProcessEnv, stderr: string, err: Error) {
     logger.log(`Does the executable exist? $PATH: ${env['PATH']}, $Path: ${env['Path']}, $SHELL: ${process.env.SHELL}`)
     logger.log(`${stderr}`)
     logger.refreshStatus('x', 'errorForeground', undefined, 'error')
+
+    // Try to save compiler log if we have a root file
+    const rootFile = lw.root.file.path
+    if (rootFile) {
+        void log.saveCompilerLogToFile(rootFile)
+    }
+
     void logger.showErrorMessageWithExtensionLogButton(`Recipe terminated with fatal error: ${err.message}.`)
     lw.compile.process = undefined
     queue.clear()
@@ -439,6 +447,12 @@ function handleRetryError(step: RecipeStep) {
  */
 function handleNoRetryError(configuration: vscode.WorkspaceConfiguration, step: RecipeStep) {
     logger.refreshStatus('x', 'errorForeground')
+
+    // Save compiler log to file even on error
+    if (step.rootFile) {
+        void log.saveCompilerLogToFile(step.rootFile)
+    }
+
     if (['onFailed', 'onBuilt'].includes(configuration.get('latex.autoClean.run') as string)) {
         void lw.extra.clean(step.rootFile).then(() => lw.event.fire(lw.event.AutoCleaned))
     }
@@ -453,6 +467,13 @@ function handleNoRetryError(configuration: vscode.WorkspaceConfiguration, step: 
 function handleExternalCommandError() {
     logger.log(`Build with external command returns error on PID ${lw.compile.process?.pid}.`)
     logger.refreshStatus('x', 'errorForeground', undefined, 'warning')
+
+    // Save compiler log to file even on error
+    const rootFile = lw.root.file.path
+    if (rootFile) {
+        void lw.log.saveCompilerLogToFile(rootFile)
+    }
+
     void logger.showErrorMessageWithCompilerLogButton('Build terminated with error.')
     queue.clear()
 }
@@ -484,6 +505,10 @@ async function afterSuccessfulBuilt(lastStep: Step, skipped: boolean) {
     logger.log(`Successfully built ${lastStep.rootFile} .`)
     logger.refreshStatus('check', 'statusBar.foreground', 'Recipe succeeded.')
     lw.event.fire(lw.event.BuildDone)
+
+    // Save compiler log to file next to the .tex file
+    void log.saveCompilerLogToFile(lastStep.rootFile)
+
     if (!lastStep.isExternal && skipped) {
         return
     }

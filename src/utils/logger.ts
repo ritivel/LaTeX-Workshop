@@ -20,7 +20,8 @@ export const log = {
     logConfig,
     logConfigChange,
     logDeprecatedConfig,
-    applyPlaceholders
+    applyPlaceholders,
+    saveCompilerLogToFile
 }
 
 function resetCachedLog() {
@@ -292,5 +293,40 @@ function logConfigChange(ev: vscode.ConfigurationChangeEvent) {
                 logTagless(`[Config] Configuration changed to { ${config}: ${JSON.stringify(value)} } at ${workspace?.uri.toString(true)} .`)
             }
         })
+    }
+}
+
+/**
+ * Saves the compiler log to a file next to the .tex file.
+ * The log file will be named <texBasename>.log in the same directory as the .tex file.
+ *
+ * @param {string} rootFile - Path to the root LaTeX file.
+ */
+async function saveCompilerLogToFile(rootFile: string) {
+    if (!rootFile) {
+        return
+    }
+
+    try {
+        const compilerLog = CACHED_COMPILER.join('')
+        if (!compilerLog || compilerLog.trim() === '' || compilerLog === 'Ready') {
+            // No meaningful log content to save
+            return
+        }
+
+        const texDir = path.dirname(rootFile)
+        const texBasename = path.basename(rootFile, path.extname(rootFile))
+        const logPath = path.join(texDir, `${texBasename}.log`)
+
+        // Write the log file
+        await vscode.workspace.fs.writeFile(
+            vscode.Uri.file(logPath),
+            Buffer.from(compilerLog, 'utf8')
+        )
+
+        logTagless(`Compiler log saved to ${logPath}`)
+    } catch (err) {
+        // Silently fail - don't interrupt the build process if log saving fails
+        logTagless(`Failed to save compiler log: ${err instanceof Error ? err.message : String(err)}`)
     }
 }
